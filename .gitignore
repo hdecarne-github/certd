@@ -13,3 +13,11 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Build artifacts
+internal/server/htdocs/*
+build/*
+.vscode/*
+
+# Local configs
+*-local.conf
