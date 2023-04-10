@@ -24,7 +24,7 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	config, err := Load("./testdata/acme.yaml")
+	config, err := Load("./testdata/acme-test.yaml")
 	require.NoError(t, err)
 	require.NotNil(t, config)
 }
