@@ -23,7 +23,7 @@ jobs:
           go-version: '1.20'
           check-latest: true
       - name: Set up Caching for Linux
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         uses: actions/cache@v3
         with:
           path: |
@@ -32,8 +32,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Set up Caching for MacOS
-        if: matrix.os == 'macos-latest'
+      - name: Set up Caching for macOS
+        if: runner.os == 'macOS'
         uses: actions/cache@v3
         with:
           path: |
@@ -43,7 +43,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Set up Caching for Windows
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         uses: actions/cache@v3
         with:
           path: |
@@ -57,7 +57,7 @@ jobs:
           go install github.com/letsencrypt/pebble/v2/...@v2.4.0
       - name: Set up CI for Linux
         run: |
-          $(go env GOPATH)/bin/pebble -config ./pkg/certs/acme/testdata/pebble-config.json > /dev/nul &
+          $(go env GOPATH)/bin/pebble -config ./pkg/certs/acme/testdata/pebble-config.json > /dev/null 2>&1 &
       - name: Run Build
         run: make build test
       - name: Run SonarQube
