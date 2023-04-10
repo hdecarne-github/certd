@@ -1,0 +1,16 @@
+providers:
+  "Test":
+    enabled: true
+    url: "https://localhost:14000/dir"
+    registration_email: "webmaster@localhost"
+
+domains:
+  ".":
+    http-01:
+      enabled: true
+      iface: ""
+      port: 5002
+    tls-apn-01:
+      enabled: true
+      iface: ""
+      port: 5001

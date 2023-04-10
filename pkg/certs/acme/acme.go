@@ -212,7 +212,3 @@ func (factory *ACMECertificateFactory) keyType() (certcrypto.KeyType, error) {
 	}
 	return "", fmt.Errorf("unsupported key provider '%s'", keyProvider)
 }
-
-func init() {
-
-}

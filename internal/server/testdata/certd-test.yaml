@@ -1,0 +1,4 @@
+debug: true
+
+server:
+  acme_config: "acme-test.yaml"

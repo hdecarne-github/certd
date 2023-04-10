@@ -69,13 +69,13 @@ func (cmd *serverCmd) Run(cmdline *cmdline) error {
 	if err != nil {
 		return err
 	}
-	applyServerCmdline(config, cmdline)
+	mergeServerCmdline(config, cmdline)
 	applyGlobalConfig(config)
 	return cmdline.runner.Server(&config.Server)
 }
 
-func applyServerCmdline(config *config.Config, cmdline *cmdline) {
-	applyGlobalCmdline(config, cmdline)
+func mergeServerCmdline(config *config.Config, cmdline *cmdline) {
+	mergeGlobalCmdline(config, cmdline)
 	if cmdline.Server.ServerURL != "" {
 		config.Server.ServerURL = cmdline.Server.ServerURL
 	}
@@ -87,10 +87,16 @@ func applyServerCmdline(config *config.Config, cmdline *cmdline) {
 	}
 }
 
-func applyGlobalCmdline(config *config.Config, cmdline *cmdline) {
-	config.Debug = cmdline.Debug
-	config.Verbose = cmdline.Verbose
-	config.ANSI = cmdline.ANSI
+func mergeGlobalCmdline(config *config.Config, cmdline *cmdline) {
+	if cmdline.Debug {
+		config.Debug = true
+	}
+	if cmdline.Verbose {
+		config.Verbose = true
+	}
+	if cmdline.ANSI {
+		config.ANSI = true
+	}
 }
 
 func applyGlobalConfig(config *config.Config) {
@@ -99,6 +105,8 @@ func applyGlobalConfig(config *config.Config) {
 		logging.UpdateRootLogger(logger, zerolog.DebugLevel)
 	} else if config.Verbose {
 		logging.UpdateRootLogger(logger, zerolog.InfoLevel)
+	} else {
+		logging.UpdateRootLogger(logger, zerolog.WarnLevel)
 	}
 }
 

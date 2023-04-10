@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hdecarne-github/certd/internal/config"
 	"github.com/hdecarne-github/certd/pkg/certs"
 	"github.com/hdecarne-github/certd/pkg/certs/acme"
 	x509ext "github.com/hdecarne-github/certd/pkg/certs/extensions"
@@ -55,7 +56,7 @@ const errorGenerateFailure = "Certificate generation failed"
 const errorEntryNotFound = "Unknown store entry"
 
 func (s *server) storeEntries(c *gin.Context) {
-	entries := make([]storeEntryResponse, 0)
+	entries := make([]StoreEntryResponse, 0)
 	storeEntries := s.store.Entries()
 	for {
 		storeEntry := storeEntries.Next()
@@ -69,11 +70,11 @@ func (s *server) storeEntries(c *gin.Context) {
 		}
 		entries = append(entries, *storeEntryResponse)
 	}
-	response := &storeEntriesResponse{Entries: entries}
+	response := &StoreEntriesResponse{Entries: entries}
 	c.JSON(http.StatusOK, response)
 }
 
-func (s *server) newStoreEntryResponse(storeEntry certs.StoreEntry) (*storeEntryResponse, error) {
+func (s *server) newStoreEntryResponse(storeEntry certs.StoreEntry) (*StoreEntryResponse, error) {
 	hasKey := storeEntry.HasKey()
 	hasCertificate := storeEntry.HasCertificate()
 	hasCertificateRequest := storeEntry.HasCertificateRequest()
@@ -104,7 +105,7 @@ func (s *server) newStoreEntryResponse(storeEntry certs.StoreEntry) (*storeEntry
 		// should never happen
 		return nil, fmt.Errorf("invalid store entry '%s'", storeEntry.Name())
 	}
-	storeEntryResponse := &storeEntryResponse{
+	storeEntryResponse := &StoreEntryResponse{
 		Name:      storeEntry.Name(),
 		DN:        dn,
 		Key:       hasKey,
@@ -133,7 +134,7 @@ func (s *server) storeEntryDetails(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	crtDetails := storeEntryCRTDetailsResponse{Extensions: make([][2]string, 0)}
+	crtDetails := StoreEntryCRTDetailsResponse{Extensions: make([][2]string, 0)}
 	if storeEntryResponse.CRT {
 		certificate, err := storeEntry.Certificate()
 		if err != nil {
@@ -147,8 +148,8 @@ func (s *server) storeEntryDetails(c *gin.Context) {
 		crtDetails.SigAlg = certificate.SignatureAlgorithm.String()
 		crtDetails.Extensions = s.appendExtensionDetails(crtDetails.Extensions, certificate)
 	}
-	response := &storeEntryDetailsResponse{
-		storeEntryResponse: *storeEntryResponse,
+	response := &StoreEntryDetailsResponse{
+		StoreEntryResponse: *storeEntryResponse,
 		CRTDetails:         crtDetails,
 	}
 	c.JSON(http.StatusOK, response)
@@ -184,34 +185,34 @@ func (s *server) appendExtensionDetails(extensions [][2]string, certificate *x50
 }
 
 func (s *server) storeCAs(c *gin.Context) {
-	cas := make([]storeCAResponse, 0)
-	localCA := storeCAResponse{
+	cas := make([]StoreCAResponse, 0)
+	localCA := StoreCAResponse{
 		Name: local.ProviderName,
 	}
 	cas = append(cas, localCA)
-	remoteCA := storeCAResponse{
+	remoteCA := StoreCAResponse{
 		Name: remote.ProviderName,
 	}
 	cas = append(cas, remoteCA)
-	acmeConfig, err := acme.Load(s.config.ACMEConfig)
+	acmeConfig, err := acme.Load(config.ResolveConfigPath(s.config.BasePath, s.config.ACMEConfig))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 	for _, acmeProvider := range acmeConfig.Providers {
-		acmeCA := storeCAResponse{
+		acmeCA := StoreCAResponse{
 			Name: acme.ProviderPrefix + acmeProvider.Name,
 		}
 		cas = append(cas, acmeCA)
 	}
-	response := &storeCAsResponse{
+	response := &StoreCAsResponse{
 		CAs: cas,
 	}
 	c.JSON(http.StatusOK, response)
 }
 
 func (s *server) storeLocalIssuers(c *gin.Context) {
-	issuers := make([]storeLocalIssuerResponse, 0)
+	issuers := make([]StoreLocalIssuerResponse, 0)
 	storeEntries := s.store.Entries()
 	for {
 		storeEntry := storeEntries.Next()
@@ -224,20 +225,20 @@ func (s *server) storeLocalIssuers(c *gin.Context) {
 			return
 		}
 		if certificate != nil && certificate.IsCA && storeEntry.HasKey() {
-			issuer := storeLocalIssuerResponse{
+			issuer := StoreLocalIssuerResponse{
 				Name: storeEntry.Name(),
 			}
 			issuers = append(issuers, issuer)
 		}
 	}
-	response := &storeLocalIssuersResponse{
+	response := &StoreLocalIssuersResponse{
 		Issuers: issuers,
 	}
 	c.JSON(http.StatusOK, response)
 }
 
 func (s *server) storeLocalGenerate(c *gin.Context) {
-	generateLocal := &storeGenerateLocalRequest{}
+	generateLocal := &StoreGenerateLocalRequest{}
 	err := json.NewDecoder(c.Request.Body).Decode(generateLocal)
 	if err != nil {
 		s.sendError(c, http.StatusBadRequest, errorInvalidRequest)
@@ -306,7 +307,7 @@ func (s *server) storeLocalGenerate(c *gin.Context) {
 }
 
 func (s *server) storeRemoteGenerate(c *gin.Context) {
-	generateRemote := &storeGenerateRemoteRequest{}
+	generateRemote := &StoreGenerateRemoteRequest{}
 	err := json.NewDecoder(c.Request.Body).Decode(generateRemote)
 	if err != nil {
 		s.sendError(c, http.StatusBadRequest, "Invalid request")
@@ -316,7 +317,7 @@ func (s *server) storeRemoteGenerate(c *gin.Context) {
 }
 
 func (s *server) storeACMEGenerate(c *gin.Context) {
-	generateACME := &storeGenerateACMERequest{}
+	generateACME := &StoreGenerateACMERequest{}
 	err := json.NewDecoder(c.Request.Body).Decode(generateACME)
 	if err != nil {
 		s.sendError(c, http.StatusBadRequest, "Invalid request")

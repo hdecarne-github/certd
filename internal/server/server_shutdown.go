@@ -19,15 +19,12 @@ package server
 
 import (
 	"net/http"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hdecarne-github/certd/internal/buildinfo"
 )
 
-func (s *server) about(c *gin.Context) {
-	about := &AboutResponse{
-		Version:   buildinfo.Version(),
-		Timestamp: buildinfo.Timestamp(),
-	}
-	c.JSON(http.StatusOK, about)
+func (s *server) shutdown(c *gin.Context) {
+	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	c.Status(http.StatusOK)
 }

@@ -23,17 +23,17 @@ import (
 )
 
 // <- /api/about
-type aboutResponse struct {
+type AboutResponse struct {
 	Version   string `json:"version"`
 	Timestamp string `json:"timestamp"`
 }
 
 // <- /api/store/entries
-type storeEntriesResponse struct {
-	Entries []storeEntryResponse `json:"entries"`
+type StoreEntriesResponse struct {
+	Entries []StoreEntryResponse `json:"entries"`
 }
 
-type storeEntryResponse struct {
+type StoreEntryResponse struct {
 	Name      string    `json:"name"`
 	DN        string    `json:"dn"`
 	Key       bool      `json:"key"`
@@ -46,12 +46,12 @@ type storeEntryResponse struct {
 }
 
 // <- /api/store/entry/detail/:name
-type storeEntryDetailsResponse struct {
-	storeEntryResponse
-	CRTDetails storeEntryCRTDetailsResponse `json:"crt_details"`
+type StoreEntryDetailsResponse struct {
+	StoreEntryResponse
+	CRTDetails StoreEntryCRTDetailsResponse `json:"crt_details"`
 }
 
-type storeEntryCRTDetailsResponse struct {
+type StoreEntryCRTDetailsResponse struct {
 	Version    int         `json:"version"`
 	Serial     string      `json:"serial"`
 	KeyType    string      `json:"key_type"`
@@ -61,47 +61,47 @@ type storeEntryCRTDetailsResponse struct {
 }
 
 // <- /api/store/cas
-type storeCAsResponse struct {
-	CAs []storeCAResponse `json:"cas"`
+type StoreCAsResponse struct {
+	CAs []StoreCAResponse `json:"cas"`
 }
 
-type storeCAResponse struct {
+type StoreCAResponse struct {
 	Name string `json:"name"`
 }
 
 // <- /api/store/local/issuers
-type storeLocalIssuersResponse struct {
-	Issuers []storeLocalIssuerResponse `json:"issuers"`
+type StoreLocalIssuersResponse struct {
+	Issuers []StoreLocalIssuerResponse `json:"issuers"`
 }
 
-type storeLocalIssuerResponse struct {
+type StoreLocalIssuerResponse struct {
 	Name string `json:"name"`
 }
 
 // <- /api/store/local/generate
-type storeGenerateLocalRequest struct {
-	storeGenerateRequest
+type StoreGenerateLocalRequest struct {
+	StoreGenerateRequest
 	DN              string                       `json:"dn"`
 	KeyType         string                       `json:"key_type"`
 	Issuer          string                       `json:"issuer"`
 	ValidFrom       time.Time                    `json:"valid_from"`
 	ValidTo         time.Time                    `json:"valid_to"`
-	KeyUsage        keyUsageExtensionSpec        `json:"key_usage"`
-	ExtKeyUsage     extKeyUsageExtensionSpec     `json:"ext_key_usage"`
-	BasicConstraint basicConstraintExtensionSpec `json:"basic_constraint"`
+	KeyUsage        KeyUsageExtensionSpec        `json:"key_usage"`
+	ExtKeyUsage     ExtKeyUsageExtensionSpec     `json:"ext_key_usage"`
+	BasicConstraint BasicConstraintExtensionSpec `json:"basic_constraint"`
 }
 
-type storeGenerateRequest struct {
+type StoreGenerateRequest struct {
 	Name string `json:"name"`
 	CA   string `json:"ca"`
 }
 
-type extensionSpec struct {
+type ExtensionSpec struct {
 	Enabled bool `json:"enabled"`
 }
 
-type keyUsageExtensionSpec struct {
-	extensionSpec
+type KeyUsageExtensionSpec struct {
+	ExtensionSpec
 	DigitalSignature  bool `json:"digital_signature"`
 	ContentCommitment bool `json:"content_commitment"`
 	KeyEncipherment   bool `json:"key_encipherment"`
@@ -113,7 +113,7 @@ type keyUsageExtensionSpec struct {
 	DecipherOnly      bool `json:"decipher_only"`
 }
 
-func (spec *keyUsageExtensionSpec) toKeyUsage() x509.KeyUsage {
+func (spec *KeyUsageExtensionSpec) toKeyUsage() x509.KeyUsage {
 	keyUsage := x509.KeyUsage(0)
 	if !spec.Enabled {
 		return keyUsage
@@ -148,8 +148,8 @@ func (spec *keyUsageExtensionSpec) toKeyUsage() x509.KeyUsage {
 	return keyUsage
 }
 
-type extKeyUsageExtensionSpec struct {
-	extensionSpec
+type ExtKeyUsageExtensionSpec struct {
+	ExtensionSpec
 	Any                            bool `json:"any"`
 	ServerAuth                     bool `json:"server_auth"`
 	ClientAuth                     bool `json:"client_auth"`
@@ -166,7 +166,7 @@ type extKeyUsageExtensionSpec struct {
 	MicrosoftKernelCodeSigning     bool `json:"microsoft_kernel_code_signing"`
 }
 
-func (spec *extKeyUsageExtensionSpec) toExtKeyUsage() []x509.ExtKeyUsage {
+func (spec *ExtKeyUsageExtensionSpec) toExtKeyUsage() []x509.ExtKeyUsage {
 	if !spec.Enabled {
 		return nil
 	}
@@ -216,13 +216,13 @@ func (spec *extKeyUsageExtensionSpec) toExtKeyUsage() []x509.ExtKeyUsage {
 	return extKeyUsage
 }
 
-type basicConstraintExtensionSpec struct {
-	extensionSpec
+type BasicConstraintExtensionSpec struct {
+	ExtensionSpec
 	CA      bool `json:"ca"`
 	PathLen int  `json:"path_len"`
 }
 
-func (spec *basicConstraintExtensionSpec) applyToCertificate(certificate *x509.Certificate) {
+func (spec *BasicConstraintExtensionSpec) applyToCertificate(certificate *x509.Certificate) {
 	if spec.Enabled {
 		certificate.IsCA = spec.CA
 		if spec.CA && spec.PathLen >= 0 {
@@ -237,15 +237,15 @@ func (spec *basicConstraintExtensionSpec) applyToCertificate(certificate *x509.C
 }
 
 // <- /api/store/remote/generate
-type storeGenerateRemoteRequest struct {
-	storeGenerateRequest
+type StoreGenerateRemoteRequest struct {
+	StoreGenerateRequest
 	DN      string `json:"dn"`
 	KeyType string `json:"key_type"`
 }
 
 // <- /api/store/acme/generate
-type storeGenerateACMERequest struct {
-	storeGenerateRequest
+type StoreGenerateACMERequest struct {
+	StoreGenerateRequest
 	Domains []string `json:"domains"`
 	KeyType string   `json:"key_type"`
 }

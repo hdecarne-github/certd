@@ -84,6 +84,11 @@ func decodeValue(out io.Writer, value *asn1.RawValue, indent string) error {
 	return tagDecodeFunc(value.Tag)(out, value, indent)
 }
 
+const valuePreambleFormat = "%s%s ::= "
+const defaultValueFormat = valuePreambleFormat + "%s\n"
+const stringValueFormat = valuePreambleFormat + "\"%s\"\n"
+const oidValueFormat = valuePreambleFormat + "%s%s\n"
+
 func decodeBooleanValue(out io.Writer, value *asn1.RawValue, indent string) error {
 	var booleanValue bool
 	_, err := asn1.Unmarshal(value.FullBytes, &booleanValue)
@@ -96,7 +101,7 @@ func decodeBooleanValue(out io.Writer, value *asn1.RawValue, indent string) erro
 	} else {
 		booleanString = "FALSE"
 	}
-	fmt.Fprintf(out, "%s%s ::= %s\n", indent, tagName(value.Tag), booleanString)
+	fmt.Fprintf(out, defaultValueFormat, indent, tagName(value.Tag), booleanString)
 	return nil
 }
 
@@ -109,7 +114,7 @@ func decodeIntegerValue(out io.Writer, value *asn1.RawValue, indent string) erro
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s%s ::= %s\n", indent, tagName(value.Tag), integerValue.String())
+	fmt.Fprintf(out, defaultValueFormat, indent, tagName(value.Tag), integerValue.String())
 	return nil
 }
 
@@ -119,7 +124,7 @@ func decodeBitStringValue(out io.Writer, value *asn1.RawValue, indent string) er
 	if err != nil {
 		return err
 	}
-	preamble0 := fmt.Sprintf("%s%s ::= ", indent, tagName(value.Tag))
+	preamble0 := fmt.Sprintf(valuePreambleFormat, indent, tagName(value.Tag))
 	decodeBytes(out, bitStringValue.Bytes, indent, preamble0)
 	return nil
 }
@@ -130,7 +135,7 @@ func decodeOctetStringValue(out io.Writer, value *asn1.RawValue, indent string) 
 	if err != nil {
 		return err
 	}
-	preamble0 := fmt.Sprintf("%s%s ::= ", indent, tagName(value.Tag))
+	preamble0 := fmt.Sprintf(valuePreambleFormat, indent, tagName(value.Tag))
 	decodeBytes(out, octetStringValue, indent, preamble0)
 	return nil
 }
@@ -143,7 +148,7 @@ func decodeOIDValue(out io.Writer, value *asn1.RawValue, indent string) error {
 	}
 	oidString := oidValue.String()
 	oidName := wellKnownOIDSMap[oidString]
-	fmt.Fprintf(out, "%s%s ::= %s%s\n", indent, tagName(value.Tag), oidString, oidName)
+	fmt.Fprintf(out, oidValueFormat, indent, tagName(value.Tag), oidString, oidName)
 	return nil
 }
 
@@ -153,7 +158,7 @@ func decodeStringValue(out io.Writer, value *asn1.RawValue, indent string) error
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s%s ::= \"%s\"\n", indent, tagName(value.Tag), stringValue)
+	fmt.Fprintf(out, stringValueFormat, indent, tagName(value.Tag), stringValue)
 	return nil
 }
 
@@ -163,12 +168,12 @@ func decodeTimeValue(out io.Writer, value *asn1.RawValue, indent string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s%s ::= %s\n", indent, tagName(value.Tag), utcTimeValue)
+	fmt.Fprintf(out, defaultValueFormat, indent, tagName(value.Tag), utcTimeValue)
 	return nil
 }
 
 func decodeRawValue(out io.Writer, value *asn1.RawValue, indent string) error {
-	preamble0 := fmt.Sprintf("%s%s ::= ", indent, tagName(value.Tag))
+	preamble0 := fmt.Sprintf(valuePreambleFormat, indent, tagName(value.Tag))
 	decodeBytes(out, value.Bytes, indent, preamble0)
 	return nil
 }

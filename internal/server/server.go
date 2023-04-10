@@ -154,6 +154,7 @@ func (s *server) setupRouter(prefix string) (*gin.Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unexpected error: %w", err)
 	}
+	router.GET(prefix+"/api/shutdown", s.shutdown)
 	router.GET(prefix+"/api/about", s.about)
 	router.GET(prefix+"/api/store/entries", s.storeEntries)
 	router.GET(prefix+"/api/store/entry/details/:name", s.storeEntryDetails)

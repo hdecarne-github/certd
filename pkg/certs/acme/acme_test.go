@@ -31,7 +31,7 @@ func TestACMECertificateFactory(t *testing.T) {
 	os.Setenv("LEGO_CA_CERTIFICATES", "./testdata/certs/pebble.minica.pem")
 
 	keyFactory := ecdsa.NewECDSAKeyPairFactory(elliptic.P256())
-	certificateFactory := NewACMECertificateFactory([]string{"localhost"}, "testdata/acme.yaml", "Test", keyFactory)
+	certificateFactory := NewACMECertificateFactory([]string{"localhost"}, "testdata/acme-test.yaml", "Test", keyFactory)
 	key, certificate, err := certificateFactory.New()
 	require.NoError(t, err)
 	require.NotNil(t, key)
