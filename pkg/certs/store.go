@@ -25,13 +25,25 @@ import (
 type Store interface {
 	Name() string
 	Entries() StoreEntries
+	Entry(name string) (StoreEntry, error)
 }
 
 type StoreEntry interface {
 	Name() string
 	Store() Store
-	PrivateKey() (crypto.PrivateKey, error)
+	HasKey() bool
+	Key() (crypto.PrivateKey, error)
+	HasCertificate() bool
 	Certificate() (*x509.Certificate, error)
+	HasCertificateRequest() bool
+	CertificateRequest() (*x509.CertificateRequest, error)
+	HasRevocationList() bool
+	RevocationList() (*x509.RevocationList, error)
+	Attributes() (*StoreEntryAttributes, error)
+}
+
+type StoreEntryAttributes struct {
+	Provider string `json:"provider"`
 }
 
 type StoreEntries interface {

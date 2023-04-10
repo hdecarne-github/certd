@@ -20,4 +20,4 @@ build/*
 .vscode/*
 
 # Local configs
-*-local.conf
+*-local.yaml

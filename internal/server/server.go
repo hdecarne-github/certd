@@ -20,17 +20,21 @@ package server
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hdecarne-github/certd/internal/buildinfo"
+	"github.com/hdecarne-github/certd/internal/config"
 	"github.com/hdecarne-github/certd/internal/ginextra"
 	"github.com/hdecarne-github/certd/internal/logging"
+	"github.com/hdecarne-github/certd/internal/state"
+	"github.com/hdecarne-github/certd/pkg/certs/fsstore"
 	"github.com/rs/zerolog"
 )
 
@@ -41,21 +45,33 @@ func htdocsFS() (fs.FS, error) {
 	return fs.Sub(htdocs, "htdocs")
 }
 
-func Run(listen string) error {
-	logger := logging.RootLogger().With().Str("server", listen).Logger()
+func Run(config *config.ServerConfig) error {
+	logger := logging.RootLogger().With().Str("server", config.ServerURL).Logger()
 	s := &server{
+		config: config,
 		logger: &logger,
 	}
-	return s.Run(listen)
+	return s.Run()
 }
 
 type server struct {
+	config *config.ServerConfig
+	store  *fsstore.FSStore
 	logger *zerolog.Logger
 }
 
-func (s *server) Run(listen string) error {
+func (s *server) Run() error {
 	s.logger.Info().Msg("Starting server...")
-	router, err := s.setup()
+	state.UpdateHandler(state.NewFSHandler(s.config.StatePath))
+	err := s.prepareStore()
+	if err != nil {
+		return err
+	}
+	_, listen, prefix, err := s.splitServerURL()
+	if err != nil {
+		return err
+	}
+	router, err := s.setupRouter(prefix)
 	if err != nil {
 		return err
 	}
@@ -90,7 +106,47 @@ func (s *server) Run(listen string) error {
 	return nil
 }
 
-func (s *server) setup() (*gin.Engine, error) {
+func (s *server) prepareStore() error {
+	storePath := config.ResolveConfigPath(s.config.BasePath, s.config.StorePath)
+	_, err := os.Stat(storePath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	s.logger.Info().Msgf("Preparing store '%s'...", storePath)
+	if err != nil {
+		s.store, err = fsstore.Init(storePath)
+	} else {
+		s.store, err = fsstore.Open(storePath)
+	}
+	return err
+}
+
+const httpPrefix = "http://"
+const httpsPrefix = "https://"
+
+func (s *server) splitServerURL() (bool, string, string, error) {
+	remaining := s.config.ServerURL
+	var tls bool
+	if strings.HasPrefix(remaining, httpPrefix) {
+		tls = false
+		remaining = strings.TrimPrefix(remaining, httpPrefix)
+	} else if strings.HasPrefix(remaining, httpsPrefix) {
+		tls = true
+		remaining = strings.TrimPrefix(remaining, httpsPrefix)
+	} else {
+		return false, "", "", fmt.Errorf("invalid server URL '%s'; unrecognized protocol", s.config.ServerURL)
+	}
+	remainings := strings.SplitN(remaining, "/", 2)
+	listen := remainings[0]
+	prefix := "/"
+	if len(remainings) == 2 {
+		prefix = prefix + remainings[1]
+	}
+	prefix = strings.TrimSuffix(prefix, "/")
+	return tls, listen, prefix, nil
+}
+
+func (s *server) setupRouter(prefix string) (*gin.Engine, error) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(ginextra.Logger(s.logger), gin.Recovery())
@@ -98,20 +154,25 @@ func (s *server) setup() (*gin.Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unexpected error: %w", err)
 	}
-	router.GET("/api/about", s.about)
-	router.NoRoute(ginextra.StaticFS(http.FS(htdocs)))
+	router.GET(prefix+"/api/about", s.about)
+	router.GET(prefix+"/api/store/entries", s.storeEntries)
+	router.GET(prefix+"/api/store/entry/details/:name", s.storeEntryDetails)
+	router.GET(prefix+"/api/store/cas", s.storeCAs)
+	router.GET(prefix+"/api/store/local/issuers", s.storeLocalIssuers)
+	router.PUT(prefix+"/api/store/local/generate", s.storeLocalGenerate)
+	router.PUT(prefix+"/api/store/remote/generate", s.storeRemoteGenerate)
+	router.PUT(prefix+"/api/store/acme/generate", s.storeACMEGenerate)
+	router.NoRoute(ginextra.StaticFS(prefix, http.FS(htdocs)))
 	return router, nil
 }
 
-type aboutResponse struct {
-	Version   string `json:"version"`
-	Timestamp string `json:"timestamp"`
+type serverErrorResponse struct {
+	Message string `json:"message"`
 }
 
-func (s *server) about(c *gin.Context) {
-	about := &aboutResponse{
-		Version:   buildinfo.Version(),
-		Timestamp: buildinfo.Timestamp(),
+func (s *server) sendError(c *gin.Context, status int, message string) {
+	errorResponse := &serverErrorResponse{
+		Message: message,
 	}
-	c.JSON(http.StatusOK, about)
+	c.JSON(status, errorResponse)
 }

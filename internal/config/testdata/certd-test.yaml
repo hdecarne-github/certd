@@ -1,0 +1,12 @@
+debug: true
+verbose: true
+ansi: true
+
+server:
+  server_url: "https://certd.mydomain.org"
+  store_path: "./store"
+  state_path: "./state"
+  acme_config: "./acme.yaml"
+
+cli:
+  server_url: "https://certd.mydomain.org"

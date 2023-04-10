@@ -1,0 +1,29 @@
+# CertD configuration file.
+# Command line options take precedence over the options defined in this file.
+
+# Global options
+# The following options are common to server and cli mode.
+
+# Enable debug output (command line option: --debug)
+# debug: false
+# Enable verbose output (command line option: --verbose)
+verbose: true
+
+# Force ANSI colored output (command line option: --ansi)
+# ansi: false
+
+# Server options
+server:
+# Server URL to listen on (command line option: --server-url)
+#  server_url: "http://localhost:10509"
+# Store path (command line option: --store-path)
+#  store_path: "/var/lib/certd/store"
+# State path, used to persist state information like ACME registrations (command line option: --state-path)
+#  state_path: "/var/lib/certd/state"
+# Path of the ACME configuration file
+#  acme_config: "acme.yaml"
+
+# CLI options
+cli:
+# Server address (command line option: --server-url)
+#  server_url: "http://localhost:10509"

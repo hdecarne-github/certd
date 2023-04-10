@@ -1,0 +1,12 @@
+debug: false
+verbose: false
+ansi: false
+
+server:
+  server_url: "http://localhost:10509"
+  store_path: "/var/lib/certd/store"
+  state_path: "/var/lib/certd/state"
+  acme_config: "acme.yaml"
+
+cli:
+  server_url: "http://localhost:10509"

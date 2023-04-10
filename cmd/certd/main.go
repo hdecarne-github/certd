@@ -22,5 +22,5 @@ import (
 )
 
 func main() {
-	_ = certd.Run()
+	_ = certd.Run(nil)
 }

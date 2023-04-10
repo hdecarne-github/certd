@@ -1,0 +1,31 @@
+# CertD ACME configuration file.
+#
+
+# List of ACME providers to use
+providers:
+  # Provider name
+  "Let's Encrypt":
+    # Whether this provider is enabled or not
+    enabled: true
+    # URL to use for accessing this ACME service
+    url: "https://acme-v02.api.letsencrypt.org/directory"
+    # The e-mail to use for registration
+    registration_email: "webmaster@mydomain.org"
+  "Let's Encrypt (staging)":
+    enabled: false
+    url: "https://acme-staging-v02.api.letsencrypt.org/directory"
+    registration_email: "webmaster@mydomain.org"
+
+# List of domains and the corresponding challenge mechanisms
+domains:
+  # Domain names are always terminated by a ".". The certificate domain is matched via a suffix match.
+  # E.g. "www.mydomain.org" matches "mydomain.org." (the "." is handled automatically).
+  # Therefore domain name "." represents a catch-all clauss. In case of multiple matches, the longest match is used.
+  ".":
+    http01:
+      # Whether HTTP-01 mechanism is enabled or not
+      enabled: true
+      # The interface to bind to during the challenge
+      iface: ""
+      # The port to bind to during the challenge
+      port: 5001
