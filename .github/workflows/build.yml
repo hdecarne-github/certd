@@ -15,20 +15,49 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.20'
           check-latest: true
-      - name: Set up Caching
+      - name: Set up Caching for Linux
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/cache@v3
         with:
           path: |
             ~/.cache/go-build
-            ~/go
+            ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+      - name: Set up Caching for MacOS
+        if: matrix.os == 'macos-latest'
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Set up Caching for Windows
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~\AppData\Local\go-build
+            ~\go\pkg\mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Set up CI
+        run: |
+          go install github.com/letsencrypt/pebble/v2/...@v2.4.0
+      - name: Set up CI for Linux
+        run: |
+          $(go env GOPATH)/bin/pebble -config ./pkg/certs/acme/testdata/pebble-config.json > /dev/nul &
       - name: Run Build
         run: make build test
       - name: Run SonarQube
