@@ -166,14 +166,3 @@ func (s *server) setupRouter(prefix string) (*gin.Engine, error) {
 	router.NoRoute(ginextra.StaticFS(prefix, http.FS(htdocs)))
 	return router, nil
 }
-
-type serverErrorResponse struct {
-	Message string `json:"message"`
-}
-
-func (s *server) sendError(c *gin.Context, status int, message string) {
-	errorResponse := &serverErrorResponse{
-		Message: message,
-	}
-	c.JSON(status, errorResponse)
-}

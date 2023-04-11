@@ -249,3 +249,8 @@ type StoreGenerateACMERequest struct {
 	Domains []string `json:"domains"`
 	KeyType string   `json:"key_type"`
 }
+
+// <- /api/*
+type ServerErrorResponse struct {
+	Message string `json:"message"`
+}

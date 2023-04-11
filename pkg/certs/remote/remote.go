@@ -55,7 +55,7 @@ func (factory *LocalCertificateRequestFactory) New() (crypto.PrivateKey, *x509.C
 	if err != nil {
 		return nil, nil, err
 	}
-	certificateRequestBytes, err := x509.CreateCertificateRequest(rand.Reader, factory.template, keyPair.Public())
+	certificateRequestBytes, err := x509.CreateCertificateRequest(rand.Reader, factory.template, keyPair.Private())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create certificate request (cause: %w)", err)
 	}

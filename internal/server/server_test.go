@@ -20,6 +20,7 @@ package server_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/hdecarne-github/certd/internal/certd"
 	"github.com/hdecarne-github/certd/internal/server"
+	"github.com/hdecarne-github/certd/pkg/keys/registry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,9 +38,14 @@ const aboutServiceUrl = "http://localhost:10509/api/about"
 const storeEntriesServiceUrl = "http://localhost:10509/api/store/entries"
 const storeCAsServiceUrl = "http://localhost:10509/api/store/cas"
 const storeLocalGenerateServiceUrl = "http://localhost:10509/api/store/local/generate"
+const storeRemoteGenerateServiceUrl = "http://localhost:10509/api/store/remote/generate"
+const storeACMEGenerateServiceUrl = "http://localhost:10509/api/store/acme/generate"
 const shutdownServiceUrl = "http://localhost:10509/api/shutdown"
 
 func TestServer(t *testing.T) {
+	// Accept test CA
+	os.Setenv("LEGO_CA_CERTIFICATES", "../../pkg/certs/acme/testdata/certs/pebble.minica.pem")
+
 	workDir, err := os.MkdirTemp("", "certd")
 	require.NoError(t, err)
 	defer os.RemoveAll(workDir)
@@ -49,8 +56,15 @@ func TestServer(t *testing.T) {
 	client := &http.Client{}
 	testAbout(t, client)
 	testStoreCAs(t, client)
-	testStoreGenerateLocal1(t, client)
-	testStoreGenerateLocal2(t, client)
+	for i, keyProvider := range registry.KeyProviders() {
+		for j, factory := range registry.StandardKeys(keyProvider) {
+			testStoreGenerateLocal1(t, client, factory.Name(), (i*10)+(2*j))
+			testStoreGenerateLocal2(t, client, factory.Name(), (i*10)+(2*j)+1)
+		}
+	}
+	testStoreGenerateRemote(t, client)
+	testStoreGenerateACME(t, client)
+	testStoreEntries(t, client)
 	testShutdown(t, client)
 	shutdown.Wait()
 	runServer(t, storePath, statePath, &shutdown)
@@ -89,14 +103,17 @@ func testStoreCAs(t *testing.T, client *http.Client) {
 	require.Equal(t, "ACME:Test", storeCAs.CAs[2].Name)
 }
 
-func testStoreGenerateLocal1(t *testing.T, client *http.Client) {
+const localCertNameFormat = "local%d"
+
+func testStoreGenerateLocal1(t *testing.T, client *http.Client, keyType string, id int) {
+	name := fmt.Sprintf(localCertNameFormat, id)
 	generateLocal := &server.StoreGenerateLocalRequest{
 		StoreGenerateRequest: server.StoreGenerateRequest{
-			Name: "cert1",
+			Name: name,
 			CA:   "Local",
 		},
-		DN:        "CN=cert1,OU=pki",
-		KeyType:   "ED25519",
+		DN:        fmt.Sprintf("CN=%s,OU=pki", name),
+		KeyType:   keyType,
 		ValidFrom: time.Now(),
 		ValidTo:   time.Now().Add(24 * 60 * time.Minute),
 		KeyUsage: server.KeyUsageExtensionSpec{
@@ -114,15 +131,17 @@ func testStoreGenerateLocal1(t *testing.T, client *http.Client) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func testStoreGenerateLocal2(t *testing.T, client *http.Client) {
+func testStoreGenerateLocal2(t *testing.T, client *http.Client, keyType string, id int) {
+	issuer := fmt.Sprintf(localCertNameFormat, id-1)
+	name := fmt.Sprintf(localCertNameFormat, id)
 	generateLocal := &server.StoreGenerateLocalRequest{
 		StoreGenerateRequest: server.StoreGenerateRequest{
-			Name: "cert2",
+			Name: name,
 			CA:   "Local",
 		},
-		DN:        "CN=cert2,OU=pki",
-		KeyType:   "ED25519",
-		Issuer:    "cert1",
+		DN:        fmt.Sprintf("CN=%s,OU=pki", name),
+		KeyType:   keyType,
+		Issuer:    issuer,
 		ValidFrom: time.Now(),
 		ValidTo:   time.Now().Add(24 * 60 * time.Minute),
 		KeyUsage: server.KeyUsageExtensionSpec{
@@ -138,6 +157,38 @@ func testStoreGenerateLocal2(t *testing.T, client *http.Client) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
+const remoteCertNameFormat = "remote%d"
+
+func testStoreGenerateRemote(t *testing.T, client *http.Client) {
+	name := fmt.Sprintf(remoteCertNameFormat, 0)
+	generateRemote := &server.StoreGenerateRemoteRequest{
+		StoreGenerateRequest: server.StoreGenerateRequest{
+			Name: name,
+			CA:   "Remote",
+		},
+		DN:      fmt.Sprintf("CN=%s,OU=pki", name),
+		KeyType: "ED25519",
+	}
+	resp := doPut(t, client, storeRemoteGenerateServiceUrl, generateRemote)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+const acmeCertNameFormat = "acme%d"
+
+func testStoreGenerateACME(t *testing.T, client *http.Client) {
+	name := fmt.Sprintf(acmeCertNameFormat, 0)
+	generateACME := &server.StoreGenerateACMERequest{
+		StoreGenerateRequest: server.StoreGenerateRequest{
+			Name: name,
+			CA:   "ACME:Test",
+		},
+		Domains: []string{"localhost"},
+		KeyType: "ECDSA P-256",
+	}
+	resp := doPut(t, client, storeACMEGenerateServiceUrl, generateACME)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
 func testShutdown(t *testing.T, client *http.Client) {
 	resp := doGet(t, client, shutdownServiceUrl)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -148,9 +199,11 @@ func testStoreEntries(t *testing.T, client *http.Client) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	storeEntries := &server.StoreEntriesResponse{}
 	decodeJsonResponse(t, resp, storeEntries)
-	require.Equal(t, 2, len(storeEntries.Entries))
-	require.Equal(t, "cert1", storeEntries.Entries[0].Name)
-	require.Equal(t, "cert2", storeEntries.Entries[1].Name)
+	require.Equal(t, 18, len(storeEntries.Entries))
+	require.Equal(t, "acme0", storeEntries.Entries[0].Name)
+	require.Equal(t, "local0", storeEntries.Entries[1].Name)
+	require.Equal(t, "local7", storeEntries.Entries[16].Name)
+	require.Equal(t, "remote0", storeEntries.Entries[17].Name)
 }
 
 func doGet(t *testing.T, client *http.Client, url string) *http.Response {

@@ -52,6 +52,7 @@ const errorInvalidRequest = "Invalid reqest"
 const errorInvalidKeyType = "Invalid key type"
 const errorInvalidIssuer = "Invalid issuer"
 const errorInvalidDN = "Invalid Distinguished Name"
+const errorInvalidACMECA = "Invalid ACME CA"
 const errorGenerateFailure = "Certificate generation failed"
 const errorEntryNotFound = "Unknown store entry"
 
@@ -123,7 +124,7 @@ func (s *server) storeEntryDetails(c *gin.Context) {
 	name := c.Param("name")
 	storeEntry, err := s.store.Entry(name)
 	if errors.Is(err, fs.ErrNotExist) {
-		s.sendError(c, http.StatusNotFound, errorEntryNotFound)
+		c.AbortWithStatusJSON(http.StatusNotFound, &ServerErrorResponse{Message: errorEntryNotFound})
 		return
 	} else if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -241,45 +242,31 @@ func (s *server) storeLocalGenerate(c *gin.Context) {
 	generateLocal := &StoreGenerateLocalRequest{}
 	err := json.NewDecoder(c.Request.Body).Decode(generateLocal)
 	if err != nil {
-		s.sendError(c, http.StatusBadRequest, errorInvalidRequest)
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidRequest})
 		return
 	}
 	keyFactory, err := s.getKeyFactory(generateLocal.KeyType)
 	if err != nil {
-		s.sendError(c, http.StatusBadRequest, errorInvalidKeyType)
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidKeyType})
 		return
 	}
 	issuer := generateLocal.Issuer
 	var parent *x509.Certificate
 	var signer crypto.PrivateKey
 	if issuer != "" {
-		issuerStoreEntry, err := s.store.Entry(issuer)
-		if err != nil {
-			s.sendError(c, http.StatusBadRequest, errorInvalidKeyType)
-			return
-		}
-		parent, err = issuerStoreEntry.Certificate()
+		parent, signer, err = s.resolveIssuer(issuer)
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
-		if parent == nil {
-			s.sendError(c, http.StatusBadRequest, errorInvalidIssuer)
-			return
-		}
-		signer, err = issuerStoreEntry.Key()
-		if err != nil {
-			c.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-		if signer == nil {
-			s.sendError(c, http.StatusBadRequest, errorInvalidIssuer)
+		if parent == nil || signer == nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidIssuer})
 			return
 		}
 	}
 	dn, err := certs.ParseDN(generateLocal.DN)
 	if err != nil {
-		s.sendError(c, http.StatusBadRequest, errorInvalidDN)
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidDN})
 		return
 	}
 	serialNumber, err := s.generateSerialNumber()
@@ -300,19 +287,54 @@ func (s *server) storeLocalGenerate(c *gin.Context) {
 	localFactory := local.NewLocalCertificateFactory(template, keyFactory, parent, signer)
 	_, err = s.store.CreateCertificate(generateLocal.Name, localFactory)
 	if err != nil {
-		s.sendError(c, http.StatusInternalServerError, errorGenerateFailure)
+		c.AbortWithStatusJSON(http.StatusNotFound, &ServerErrorResponse{Message: errorGenerateFailure})
 		return
 	}
 	c.Status(http.StatusOK)
+}
+
+func (s *server) resolveIssuer(issuer string) (*x509.Certificate, crypto.PrivateKey, error) {
+	issuerStoreEntry, err := s.store.Entry(issuer)
+	if err != nil {
+		return nil, nil, nil
+	}
+	parent, err := issuerStoreEntry.Certificate()
+	if err != nil || parent == nil {
+		return nil, nil, err
+	}
+	signer, err := issuerStoreEntry.Key()
+	if err != nil || signer == nil {
+		return nil, nil, err
+	}
+	return parent, signer, nil
 }
 
 func (s *server) storeRemoteGenerate(c *gin.Context) {
 	generateRemote := &StoreGenerateRemoteRequest{}
 	err := json.NewDecoder(c.Request.Body).Decode(generateRemote)
 	if err != nil {
-		s.sendError(c, http.StatusBadRequest, "Invalid request")
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidRequest})
 	}
-	fmt.Printf("%v", generateRemote)
+	keyFactory, err := s.getKeyFactory(generateRemote.KeyType)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidKeyType})
+		return
+	}
+	dn, err := certs.ParseDN(generateRemote.DN)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidDN})
+		return
+	}
+	template := &x509.CertificateRequest{
+		Version: 3,
+		Subject: *dn,
+	}
+	remoteFactory := remote.NewLocalCertificateRequestFactory(template, keyFactory)
+	_, err = s.store.CreateCertificateRequest(generateRemote.Name, remoteFactory)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, &ServerErrorResponse{Message: errorGenerateFailure})
+		return
+	}
 	c.Status(http.StatusOK)
 }
 
@@ -320,10 +342,35 @@ func (s *server) storeACMEGenerate(c *gin.Context) {
 	generateACME := &StoreGenerateACMERequest{}
 	err := json.NewDecoder(c.Request.Body).Decode(generateACME)
 	if err != nil {
-		s.sendError(c, http.StatusBadRequest, "Invalid request")
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidRequest})
 	}
-	fmt.Printf("%v", generateACME)
+	keyFactory, err := s.getKeyFactory(generateACME.KeyType)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidKeyType})
+		return
+	}
+	acmeConfigPath := config.ResolveConfigPath(s.config.BasePath, s.config.ACMEConfig)
+	acmeProvider, err := s.getACMEProvider(generateACME.CA)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidACMECA})
+		return
+	}
+	acmeFactory := acme.NewACMECertificateFactory(generateACME.Domains, acmeConfigPath, acmeProvider, keyFactory)
+	_, err = s.store.CreateCertificate(generateACME.Name, acmeFactory)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, &ServerErrorResponse{Message: errorGenerateFailure})
+		return
+	}
 	c.Status(http.StatusOK)
+}
+
+func (s *server) generateSerialNumber() (*big.Int, error) {
+	limit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serial, err := rand.Int(rand.Reader, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate serial number (cause: %w)", err)
+	}
+	return serial, nil
 }
 
 func (s *server) getKeyFactory(keyType string) (keys.KeyPairFactory, error) {
@@ -342,7 +389,7 @@ func (s *server) getKeyFactory(keyType string) (keys.KeyPairFactory, error) {
 		return rsa.NewRSAKeyPairFactory(2048), nil
 	case "RSA 3072":
 		return rsa.NewRSAKeyPairFactory(3072), nil
-	case "RSA 4092":
+	case "RSA 4096":
 		return rsa.NewRSAKeyPairFactory(4092), nil
 	}
 	return nil, fmt.Errorf("unrecognized key type '%s'", keyType)
@@ -364,11 +411,9 @@ func (s *server) getKeyType(publicKey any) string {
 	return "<unrecognized>"
 }
 
-func (s *server) generateSerialNumber() (*big.Int, error) {
-	limit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serial, err := rand.Int(rand.Reader, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate serial number (cause: %w)", err)
+func (s *server) getACMEProvider(ca string) (string, error) {
+	if !strings.HasPrefix(ca, acme.ProviderPrefix) {
+		return "", fmt.Errorf("unrecognized ACME CA '%s'", ca)
 	}
-	return serial, nil
+	return string([]rune(ca)[len([]rune(acme.ProviderPrefix)):]), nil
 }
