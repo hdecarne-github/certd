@@ -36,7 +36,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hdecarne-github/certd/internal/config"
 	"github.com/hdecarne-github/certd/pkg/certs"
 	"github.com/hdecarne-github/certd/pkg/certs/acme"
 	x509ext "github.com/hdecarne-github/certd/pkg/certs/extensions"
@@ -195,7 +194,7 @@ func (s *server) storeCAs(c *gin.Context) {
 		Name: remote.ProviderName,
 	}
 	cas = append(cas, remoteCA)
-	acmeConfig, err := acme.Load(config.ResolveConfigPath(s.config.BasePath, s.config.ACMEConfig))
+	acmeConfig, err := acme.Load(s.config.ResolveACMEConfig())
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -349,13 +348,13 @@ func (s *server) storeACMEGenerate(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidKeyType})
 		return
 	}
-	acmeConfigPath := config.ResolveConfigPath(s.config.BasePath, s.config.ACMEConfig)
+	acmeConfig := s.config.ResolveACMEConfig()
 	acmeProvider, err := s.getACMEProvider(generateACME.CA)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, &ServerErrorResponse{Message: errorInvalidACMECA})
 		return
 	}
-	acmeFactory := acme.NewACMECertificateFactory(generateACME.Domains, acmeConfigPath, acmeProvider, keyFactory)
+	acmeFactory := acme.NewACMECertificateFactory(generateACME.Domains, acmeConfig, acmeProvider, keyFactory)
 	_, err = s.store.CreateCertificate(generateACME.Name, acmeFactory)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, &ServerErrorResponse{Message: errorGenerateFailure})

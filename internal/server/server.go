@@ -62,7 +62,7 @@ type server struct {
 
 func (s *server) Run() error {
 	s.logger.Info().Msg("Starting server...")
-	state.UpdateHandler(state.NewFSHandler(s.config.StatePath))
+	state.UpdateHandler(state.NewFSHandler(s.config.ResolveStatePath()))
 	err := s.prepareStore()
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (s *server) Run() error {
 }
 
 func (s *server) prepareStore() error {
-	storePath := config.ResolveConfigPath(s.config.BasePath, s.config.StorePath)
+	storePath := s.config.ResolveStorePath()
 	_, err := os.Stat(storePath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err

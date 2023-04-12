@@ -36,7 +36,9 @@ import (
 
 const aboutServiceUrl = "http://localhost:10509/api/about"
 const storeEntriesServiceUrl = "http://localhost:10509/api/store/entries"
+const storeEntryDetailsServiceUrlPattern = "http://localhost:10509/api/store/entry/details/%s"
 const storeCAsServiceUrl = "http://localhost:10509/api/store/cas"
+const storeLocalIssuersServiceUrl = "http://localhost:10509/api/store/local/issuers"
 const storeLocalGenerateServiceUrl = "http://localhost:10509/api/store/local/generate"
 const storeRemoteGenerateServiceUrl = "http://localhost:10509/api/store/remote/generate"
 const storeACMEGenerateServiceUrl = "http://localhost:10509/api/store/acme/generate"
@@ -69,6 +71,8 @@ func TestServer(t *testing.T) {
 	shutdown.Wait()
 	runServer(t, storePath, statePath, &shutdown)
 	testStoreEntries(t, client)
+	testStoreEntryDetails(t, client)
+	testStoreLocalIssuers(t, client)
 	testShutdown(t, client)
 	shutdown.Wait()
 }
@@ -92,6 +96,27 @@ func testAbout(t *testing.T, client *http.Client) {
 	require.NotEmpty(t, about.Timestamp)
 }
 
+func testStoreEntries(t *testing.T, client *http.Client) {
+	resp := doGet(t, client, storeEntriesServiceUrl)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	storeEntries := &server.StoreEntriesResponse{}
+	decodeJsonResponse(t, resp, storeEntries)
+	require.Equal(t, 18, len(storeEntries.Entries))
+	require.Equal(t, "acme0", storeEntries.Entries[0].Name)
+	require.Equal(t, "local0", storeEntries.Entries[1].Name)
+	require.Equal(t, "local7", storeEntries.Entries[16].Name)
+	require.Equal(t, "remote0", storeEntries.Entries[17].Name)
+}
+
+func testStoreEntryDetails(t *testing.T, client *http.Client) {
+	const entryName = "local0"
+	resp := doGet(t, client, fmt.Sprintf(storeEntryDetailsServiceUrlPattern, entryName))
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	storeEntryDetails := &server.StoreEntryDetailsResponse{}
+	decodeJsonResponse(t, resp, storeEntryDetails)
+	require.Equal(t, entryName, storeEntryDetails.Name)
+}
+
 func testStoreCAs(t *testing.T, client *http.Client) {
 	resp := doGet(t, client, storeCAsServiceUrl)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -103,6 +128,17 @@ func testStoreCAs(t *testing.T, client *http.Client) {
 	require.Equal(t, "ACME:Test", storeCAs.CAs[2].Name)
 }
 
+func testStoreLocalIssuers(t *testing.T, client *http.Client) {
+	resp := doGet(t, client, storeLocalIssuersServiceUrl)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	storeLocalIssuers := &server.StoreLocalIssuersResponse{}
+	decodeJsonResponse(t, resp, storeLocalIssuers)
+	require.Equal(t, 8, len(storeLocalIssuers.Issuers))
+	require.Equal(t, "local0", storeLocalIssuers.Issuers[0].Name)
+	require.Equal(t, "local6", storeLocalIssuers.Issuers[7].Name)
+}
+
+const dnFormat = "CN=%s,OU=pki"
 const localCertNameFormat = "local%d"
 
 func testStoreGenerateLocal1(t *testing.T, client *http.Client, keyType string, id int) {
@@ -112,7 +148,7 @@ func testStoreGenerateLocal1(t *testing.T, client *http.Client, keyType string, 
 			Name: name,
 			CA:   "Local",
 		},
-		DN:        fmt.Sprintf("CN=%s,OU=pki", name),
+		DN:        fmt.Sprintf(dnFormat, name),
 		KeyType:   keyType,
 		ValidFrom: time.Now(),
 		ValidTo:   time.Now().Add(24 * 60 * time.Minute),
@@ -139,7 +175,7 @@ func testStoreGenerateLocal2(t *testing.T, client *http.Client, keyType string, 
 			Name: name,
 			CA:   "Local",
 		},
-		DN:        fmt.Sprintf("CN=%s,OU=pki", name),
+		DN:        fmt.Sprintf(dnFormat, name),
 		KeyType:   keyType,
 		Issuer:    issuer,
 		ValidFrom: time.Now(),
@@ -166,7 +202,7 @@ func testStoreGenerateRemote(t *testing.T, client *http.Client) {
 			Name: name,
 			CA:   "Remote",
 		},
-		DN:      fmt.Sprintf("CN=%s,OU=pki", name),
+		DN:      fmt.Sprintf(dnFormat, name),
 		KeyType: "ED25519",
 	}
 	resp := doPut(t, client, storeRemoteGenerateServiceUrl, generateRemote)
@@ -192,18 +228,6 @@ func testStoreGenerateACME(t *testing.T, client *http.Client) {
 func testShutdown(t *testing.T, client *http.Client) {
 	resp := doGet(t, client, shutdownServiceUrl)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-func testStoreEntries(t *testing.T, client *http.Client) {
-	resp := doGet(t, client, storeEntriesServiceUrl)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	storeEntries := &server.StoreEntriesResponse{}
-	decodeJsonResponse(t, resp, storeEntries)
-	require.Equal(t, 18, len(storeEntries.Entries))
-	require.Equal(t, "acme0", storeEntries.Entries[0].Name)
-	require.Equal(t, "local0", storeEntries.Entries[1].Name)
-	require.Equal(t, "local7", storeEntries.Entries[16].Name)
-	require.Equal(t, "remote0", storeEntries.Entries[17].Name)
 }
 
 func doGet(t *testing.T, client *http.Client, url string) *http.Response {

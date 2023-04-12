@@ -70,12 +70,24 @@ type ServerConfig struct {
 	ACMEConfig string `yaml:"acme_config"`
 }
 
+func (config *ServerConfig) ResolveStorePath() string {
+	return ResolvePath(config.BasePath, config.StorePath)
+}
+
+func (config *ServerConfig) ResolveStatePath() string {
+	return ResolvePath(config.BasePath, config.StatePath)
+}
+
+func (config *ServerConfig) ResolveACMEConfig() string {
+	return ResolvePath(config.BasePath, config.ACMEConfig)
+}
+
 type CLIConfig struct {
 	BasePath  string `yaml:"-"`
 	ServerURL string `yaml:"server_url"`
 }
 
-func ResolveConfigPath(basePath string, path string) string {
+func ResolvePath(basePath string, path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
